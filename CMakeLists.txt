@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 2.8.3)
 project(okvis_ros)
 
-find_package(catkin REQUIRED  
+find_package(catkin REQUIRED
   pcl_conversions
   pcl_ros
   roscpp
@@ -70,17 +70,17 @@ add_dependencies(${PROJECT_NAME} okvis_multisensor_processing)
 # make sure configure headers are built before any node using them
 add_dependencies(${PROJECT_NAME} ${PROJECT_NAME}_gencfg)
 
-target_link_libraries(${PROJECT_NAME}  
+target_link_libraries(${PROJECT_NAME}
   ${catkin_LIBRARIES}
   okvis_util
   okvis_kinematics
   okvis_time
-  okvis_cv 
+  okvis_cv
   okvis_common
   okvis_ceres
   okvis_timing
   okvis_matcher
-  okvis_frontend 
+  okvis_frontend
   okvis_multisensor_processing
   pthread
 )
@@ -98,7 +98,7 @@ include_directories(
   okvis/okvis_ceres/include
   okvis/okvis_timing/include
   okvis/okvis_matcher/include
-  okvis/okvis_frontend/include 
+  okvis/okvis_frontend/include
   okvis/okvis_multisensor_processing/include
 )
 
@@ -107,6 +107,7 @@ add_executable(okvis_node src/okvis_node.cpp )
 target_link_libraries(okvis_node ${PROJECT_NAME} )
 add_executable(okvis_node_synchronous src/okvis_node_synchronous.cpp)
 target_link_libraries(okvis_node_synchronous ${PROJECT_NAME} )
+add_executable(okvis_benchmark_node src/benchmark_node.cpp)
+target_link_libraries(okvis_benchmark_node ${PROJECT_NAME} )
 add_executable(dataset_convertor src/dataset_convertor.cpp)
 target_link_libraries(dataset_convertor ${PROJECT_NAME} )
-

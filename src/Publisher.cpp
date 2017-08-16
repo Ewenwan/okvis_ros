@@ -4,7 +4,7 @@
  *
  *  Redistribution and use in source and binary forms, with or without
  *  modification, are permitted provided that the following conditions are met:
- * 
+ *
  *   * Redistributions of source code must retain the above copyright notice,
  *     this list of conditions and the following disclaimer.
  *   * Redistributions in binary form must reproduce the above copyright notice,
@@ -149,21 +149,21 @@ bool Publisher::setCsvFile(std::fstream& csvFile)
     csvFile_->close();
   }
   csvFile_.reset(&csvFile);
-  writeCsvDescription();
+  //writeCsvDescription();
   return csvFile_->good();
 }
 // Set an odometry output CSV file.
 bool Publisher::setCsvFile(std::string& csvFileName)
 {
   csvFile_.reset(new std::fstream(csvFileName.c_str(), std::ios_base::out));
-  writeCsvDescription();
+  //writeCsvDescription();
   return csvFile_->good();
 }
 // Set an odometry output CSV file.
 bool Publisher::setCsvFile(std::string csvFileName)
 {
   csvFile_.reset(new std::fstream(csvFileName.c_str(), std::ios_base::out));
-  writeCsvDescription();
+  //writeCsvDescription();
   return csvFile_->good();
 }
 
@@ -259,7 +259,7 @@ void Publisher::setPose(const okvis::kinematics::Transformation& T_WS)
   meshMsg_.scale.x = 1.0;
   meshMsg_.scale.y = 1.0;
   meshMsg_.scale.z = 1.0;
-	
+
 	meshMsg_.action = visualization_msgs::Marker::ADD;
 	meshMsg_.color.a = 1.0; // Don't forget to set the alpha!
 	meshMsg_.color.r = 1.0;
@@ -367,7 +367,7 @@ void Publisher::setPoints(const okvis::MapPointVector& pointsMatched,
   pointsTransferred_.clear();
 
   // transform points into custom world frame:
-  const Eigen::Matrix4d T_Wc_W = parameters_.publishing.T_Wc_W.T(); 
+  const Eigen::Matrix4d T_Wc_W = parameters_.publishing.T_Wc_W.T();
 
   for (size_t i = 0; i < pointsMatched.size(); ++i) {
     // check infinity
@@ -512,6 +512,25 @@ void Publisher::publishFullStateAsCallback(
 }
 
 // Set and write full state to CSV file.
+void Publisher::txtSaveStateAsCallback(
+    const okvis::Time & t, const int64_t& id,
+    const okvis::kinematics::Transformation & T_WS)
+{
+  setTime(t);
+  setPath(T_WS);
+  if (csvFile_) {
+    if (csvFile_->good()) {
+      Eigen::Vector3d p_WS_W = T_WS.r();
+      Eigen::Quaterniond q_WS = T_WS.q();
+      csvFile_->precision(8);
+      *csvFile_ << id << " " << p_WS_W[0] << " " << p_WS_W[1] << " "
+          << p_WS_W[2] << " " << q_WS.x() << " " << q_WS.y() << " "
+          << q_WS.z() << " " << q_WS.w() << std::endl;
+    }
+  }
+}
+
+// Set and write full state to CSV file.
 void Publisher::csvSaveFullStateAsCallback(
     const okvis::Time & t, const okvis::kinematics::Transformation & T_WS,
     const Eigen::Matrix<double, 9, 1> & speedAndBiases,
@@ -653,7 +672,7 @@ void Publisher::setPath(const okvis::kinematics::Transformation &T_WS)
         "Pose frame does not exist for publishing. Choose 'S' or 'B'.";
     T = T * parameters_.imu.T_BS.inverse();
   }
-  
+
   const Eigen::Vector3d& r = T.r();
   pose.pose.position.x = r[0];
   pose.pose.position.y = r[1];

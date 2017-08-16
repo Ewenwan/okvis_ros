@@ -4,7 +4,7 @@
  *
  *  Redistribution and use in source and binary forms, with or without
  *  modification, are permitted provided that the following conditions are met:
- * 
+ *
  *   * Redistributions of source code must retain the above copyright notice,
  *     this list of conditions and the following disclaimer.
  *   * Redistributions in binary form must reproduce the above copyright notice,
@@ -202,6 +202,11 @@ class Publisher
   void publishLandmarksAsCallback(
       const okvis::Time & t, const okvis::MapPointVector & actualLandmarks,
       const okvis::MapPointVector & transferredLandmarks);
+
+
+  void txtSaveStateAsCallback(
+      const okvis::Time & t, const int64_t& id,
+      const okvis::kinematics::Transformation & T_WS);
 
   /**
    * @brief Set and write full state to CSV file.

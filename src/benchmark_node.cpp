@@ -75,25 +75,19 @@ int main(int argc, char **argv) {
   FLAGS_stderrthreshold = 0; // INFO: 0, WARNING: 1, ERROR: 2, FATAL: 3
   FLAGS_colorlogtostderr = 1;
 
-  if (argc != 3 && argc != 4) {
-    LOG(ERROR) <<
-        "Usage: ./" << argv[0] << " configuration-yaml-file bag-to-read-from [skip-first-seconds]";
-    return -1;
-  }
-
   okvis::Duration deltaT(0.0);
-  if (argc == 4) {
-    deltaT = okvis::Duration(atof(argv[3]));
-  }
 
   // set up the node
   ros::NodeHandle nh("okvis_node");
+  ros::NodeHandle nh_private("~");
 
   // publisher
   okvis::Publisher publisher(nh);
 
   // read configuration file
-  std::string configFilename(argv[1]);
+  std::string config_path = "/tmp";
+  nh_private.param("config_path", config_path, config_path);
+  std::string configFilename(config_path);
 
   okvis::RosParametersReader vio_parameters_reader(configFilename);
   okvis::VioParameters parameters;
@@ -101,36 +95,35 @@ int main(int argc, char **argv) {
 
   okvis::ThreadedKFVio okvis_estimator(parameters);
 
-  okvis_estimator.setFullStateCallback(std::bind(&okvis::Publisher::publishFullStateAsCallback,&publisher,std::placeholders::_1,std::placeholders::_2,std::placeholders::_3,std::placeholders::_4));
-  okvis_estimator.setLandmarksCallback(std::bind(&okvis::Publisher::publishLandmarksAsCallback,&publisher,std::placeholders::_1,std::placeholders::_2,std::placeholders::_3));
-  okvis_estimator.setStateCallback(std::bind(&okvis::Publisher::publishStateAsCallback,&publisher,std::placeholders::_1,std::placeholders::_2));
+  // okvis_estimator.setFullStateCallback(std::bind(&okvis::Publisher::publishFullStateAsCallback,&publisher,std::placeholders::_1,std::placeholders::_2,std::placeholders::_3,std::placeholders::_4));
+  // okvis_estimator.setLandmarksCallback(std::bind(&okvis::Publisher::publishLandmarksAsCallback,&publisher,std::placeholders::_1,std::placeholders::_2,std::placeholders::_3));
+  // okvis_estimator.setStateCallback(std::bind(&okvis::Publisher::publishStateAsCallback,&publisher,std::placeholders::_1,std::placeholders::_2));
+  okvis_estimator.setOdometryCallback(std::bind(&okvis::Publisher::txtSaveStateAsCallback,&publisher,std::placeholders::_1,std::placeholders::_2,std::placeholders::_3));
   okvis_estimator.setBlocking(true);
   publisher.setParameters(parameters); // pass the specified publishing stuff
 
-  // extract the folder path
-  std::string bagname(argv[2]);
-  size_t pos = bagname.find_last_of("/");
-  std::string path;
-  //if (pos == std::string::npos)
-  //  path = ".";
-  //else
-  //  path = bagname.substr(0, pos);
-  path = "/home/jeff/Desktop";
-
   const unsigned int numCameras = parameters.nCameraSystem.numCameras();
 
+  std::string trace_dir = "/tmp";
+  nh_private.param("trace_dir", trace_dir, trace_dir);
+  const std::string filename_out = trace_dir + "/traj_estimate.txt";
+  LOG(INFO) << "Writing trace of estimated pose to: " << filename_out;
+
   // setup files to be written
-  publisher.setCsvFile(path + "/okvis_estimator_output.csv");
-  publisher.setLandmarksCsvFile(path + "/okvis_estimator_landmarks.csv");
-  okvis_estimator.setImuCsvFile(path + "/imu0_data.csv");
-  for (size_t i = 0; i < numCameras; ++i) {
-    std::stringstream num;
-    num << i;
-    okvis_estimator.setTracksCsvFile(i, path + "/cam" + num.str() + "_tracks.csv");
-  }
+  publisher.setCsvFile(filename_out);
+  //publisher.setLandmarksCsvFile(path + "/okvis_estimator_landmarks.csv");
+  //okvis_estimator.setImuCsvFile(path + "/imu0_data.csv");
+  //for (size_t i = 0; i < numCameras; ++i) {
+  //  std::stringstream num;
+  //  num << i;
+  //  okvis_estimator.setTracksCsvFile(i, path + "/cam" + num.str() + "_tracks.csv");
+  //}
 
   // open the bag
-  rosbag::Bag bag(argv[2], rosbag::bagmode::Read);
+  std::string bag_path = "/tmp";
+  nh_private.param("bag_path", bag_path, bag_path);
+  rosbag::Bag bag(bag_path, rosbag::bagmode::Read);
+
   // views on topics. the slash is needs to be correct, it's ridiculous...
   std::string imu_topic("/imu0");
   rosbag::View view_imu(
@@ -143,41 +136,37 @@ int main(int argc, char **argv) {
   rosbag::View::iterator view_imu_iterator = view_imu.begin();
   LOG(INFO) << "No. IMU messages: " << view_imu.size();
 
-  std::vector<std::shared_ptr<rosbag::View> > view_cams_ptr;
-  std::vector<rosbag::View::iterator> view_cam_iterators;
-  std::vector<okvis::Time> times;
-  okvis::Time latest(0);
-  for(size_t i=0; i<numCameras;++i) {
-    std::string camera_topic("/cam"+std::to_string(i)+"/image_raw");
-    std::shared_ptr<rosbag::View> view_ptr(
+  std::shared_ptr<rosbag::View> view_cam_ptr;
+  rosbag::View::iterator view_cam_iterator;
+  std::string camera_topic("/cam0/image_raw");
+  std::shared_ptr<rosbag::View> view_ptr(
         new rosbag::View(
             bag,
             rosbag::TopicQuery(camera_topic)));
     if (view_ptr->size() == 0) {
       LOG(ERROR) << "no camera topic";
       return 1;
-    }
-    view_cams_ptr.push_back(view_ptr);
-    view_cam_iterators.push_back(view_ptr->begin());
-    sensor_msgs::ImageConstPtr msg1 = view_cam_iterators[i]
-        ->instantiate<sensor_msgs::Image>();
-    times.push_back(
-        okvis::Time(msg1->header.stamp.sec, msg1->header.stamp.nsec));
-    if (times.back() > latest)
-      latest = times.back();
-    LOG(INFO) << "No. cam " << i << " messages: " << view_cams_ptr.back()->size();
+  }
+  view_cam_ptr = view_ptr;
+  view_cam_iterator = view_ptr->begin();
+  LOG(INFO) << "No. cam 0 messages: " << view_cam_ptr->size();
+
+  int dataset_first_frame = 0;
+  nh_private.param("dataset_first_frame", dataset_first_frame, dataset_first_frame);
+  LOG(INFO) << "Starting dataset from frame " << dataset_first_frame;
+  int frame_idx = 0;
+  while(frame_idx < dataset_first_frame)
+  {
+    ++frame_idx;
+    ++view_cam_iterator;
+    std::advance(view_imu_iterator,10);
   }
 
-  for(size_t i=0; i<numCameras;++i) {
-    if ((latest - times[i]).toSec() > 0.01)
-      view_cam_iterators[i]++;
-  }
-
-  int counter = 0;
+  int counter = dataset_first_frame;
   okvis::Time start(0.0);
   while (ros::ok()) {
     ros::spinOnce();
-	okvis_estimator.display();
+	  okvis_estimator.display();
 
     // check if at the end
     if (view_imu_iterator == view_imu.end()){
@@ -189,63 +178,61 @@ int main(int argc, char **argv) {
       }
       return 0;
     }
-    for (size_t i = 0; i < numCameras; ++i) {
-      if (view_cam_iterators[i] == view_cams_ptr[i]->end()) {
-        std::cout << std::endl << "Finished. Press any key to exit." << std::endl << std::flush;
-        char k = 0;
-        while(k==0 && ros::ok()){
-          k = cv::waitKey(1);
-          ros::spinOnce();
-        }
-        return 0;
+    if (view_cam_iterator == view_cam_ptr->end()) {
+      std::cout << std::endl << "Finished. Press any key to exit." << std::endl << std::flush;
+      char k = 0;
+      while(k==0 && ros::ok()){
+        k = cv::waitKey(1);
+        ros::spinOnce();
       }
+      return 0;
     }
+
 
     // add images
     okvis::Time t;
-    for(size_t i=0; i<numCameras;++i) {
-      sensor_msgs::ImageConstPtr msg1 = view_cam_iterators[i]
-          ->instantiate<sensor_msgs::Image>();
-      cv::Mat filtered(msg1->height, msg1->width, CV_8UC1);
-      memcpy(filtered.data, &msg1->data[0], msg1->height * msg1->width);
-      t = okvis::Time(msg1->header.stamp.sec, msg1->header.stamp.nsec);
-      if (start == okvis::Time(0.0)) {
-        start = t;
-      }
-
-      // get all IMU measurements till then
-      okvis::Time t_imu=start;
-      do {
-        sensor_msgs::ImuConstPtr msg = view_imu_iterator
-            ->instantiate<sensor_msgs::Imu>();
-        Eigen::Vector3d gyr(msg->angular_velocity.x, msg->angular_velocity.y,
-                            msg->angular_velocity.z);
-        Eigen::Vector3d acc(msg->linear_acceleration.x,
-                            msg->linear_acceleration.y,
-                            msg->linear_acceleration.z);
-
-        t_imu = okvis::Time(msg->header.stamp.sec, msg->header.stamp.nsec);
-
-        // add the IMU measurement for (blocking) processing
-        if (t_imu - start > deltaT)
-          okvis_estimator.addImuMeasurement(t_imu, acc, gyr);
-
-        view_imu_iterator++;
-      } while (view_imu_iterator != view_imu.end() && t_imu <= t);
-
-      // add the image to the frontend for (blocking) processing
-      if (t - start > deltaT)
-        okvis_estimator.addImage(t, i, filtered);
-
-      view_cam_iterators[i]++;
+    sensor_msgs::ImageConstPtr msg1 = view_cam_iterator
+        ->instantiate<sensor_msgs::Image>();
+    cv::Mat filtered(msg1->height, msg1->width, CV_8UC1);
+    memcpy(filtered.data, &msg1->data[0], msg1->height * msg1->width);
+    t = okvis::Time(msg1->header.stamp.sec, msg1->header.stamp.nsec);
+    if (start == okvis::Time(0.0)) {
+      start = t;
     }
+
+    // get all IMU measurements till then
+    okvis::Time t_imu=start;
+    do {
+      sensor_msgs::ImuConstPtr msg = view_imu_iterator
+          ->instantiate<sensor_msgs::Imu>();
+      Eigen::Vector3d gyr(msg->angular_velocity.x, msg->angular_velocity.y,
+                          msg->angular_velocity.z);
+      Eigen::Vector3d acc(msg->linear_acceleration.x,
+                          msg->linear_acceleration.y,
+                          msg->linear_acceleration.z);
+
+      t_imu = okvis::Time(msg->header.stamp.sec, msg->header.stamp.nsec);
+
+      // add the IMU measurement for (blocking) processing
+      if (t_imu - start > deltaT)
+        okvis_estimator.addImuMeasurement(t_imu, acc, gyr);
+
+      view_imu_iterator++;
+    } while (view_imu_iterator != view_imu.end() && t_imu <= t);
+
+    view_cam_iterator++;
+
+    // add the image to the frontend for (blocking) processing
+    if (t - start > deltaT)
+      okvis_estimator.addImageWithIndex(t, 0, filtered, counter);
+
     ++counter;
 
     // display progress
     if (counter % 20 == 0) {
       std::cout
           << "\rProgress: "
-          << int(double(counter) / double(view_cams_ptr.back()->size()) * 100)
+          << int(double(counter) / double(view_cam_ptr->size()) * 100)
           << "%  " ;
     }
 
