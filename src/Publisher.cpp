@@ -77,6 +77,8 @@ Publisher::~Publisher()
   }
   if (csvFile_)
     csvFile_->close();
+  if (csvTimingFile_)
+    csvTimingFile_->close();
 }
 
 // Constructor. Calls setNodeHandle().
@@ -130,6 +132,17 @@ bool Publisher::writeCsvDescription()
 }
 
 // Write CSV header for landmarks file.
+bool Publisher::writeTimingDescription()
+{
+  if (!csvTimingFile_)
+    return false;
+  if (!csvTimingFile_->good())
+    return false;
+  *csvTimingFile_ << "timestamp" << ", " << "tot_time" << std::endl;
+  return true;
+}
+
+// Write CSV header for landmarks file.
 bool Publisher::writeLandmarksCsvDescription()
 {
   if (!csvLandmarksFile_)
@@ -165,6 +178,31 @@ bool Publisher::setCsvFile(std::string csvFileName)
   csvFile_.reset(new std::fstream(csvFileName.c_str(), std::ios_base::out));
   //writeCsvDescription();
   return csvFile_->good();
+}
+
+// Set an odometry output CSV file.
+bool Publisher::setTimingFile(std::fstream& csvFile)
+{
+  if (csvTimingFile_) {
+    csvTimingFile_->close();
+  }
+  csvTimingFile_.reset(&csvFile);
+  writeTimingDescription();
+  return csvTimingFile_->good();
+}
+// Set an odometry output CSV file.
+bool Publisher::setTimingFile(std::string& csvFileName)
+{
+  csvTimingFile_.reset(new std::fstream(csvFileName.c_str(), std::ios_base::out));
+  writeTimingDescription();
+  return csvTimingFile_->good();
+}
+// Set an odometry output CSV file.
+bool Publisher::setTimingFile(std::string csvFileName)
+{
+  csvTimingFile_.reset(new std::fstream(csvFileName.c_str(), std::ios_base::out));
+  writeTimingDescription();
+  return csvTimingFile_->good();
 }
 
 // Set a CVS file where the landmarks will be saved to.
@@ -526,6 +564,17 @@ void Publisher::txtSaveStateAsCallback(
       *csvFile_ << id << " " << p_WS_W[0] << " " << p_WS_W[1] << " "
           << p_WS_W[2] << " " << q_WS.x() << " " << q_WS.y() << " "
           << q_WS.z() << " " << q_WS.w() << std::endl;
+    }
+  }
+}
+
+void Publisher::csvSaveTimingAsCallback(
+    const double timestamp, const double t_frame)
+{
+  if(csvTimingFile_) {
+    if(csvTimingFile_->good()) {
+      csvTimingFile_->precision(16);
+      *csvTimingFile_ << timestamp << ", " << t_frame << std::endl;
     }
   }
 }

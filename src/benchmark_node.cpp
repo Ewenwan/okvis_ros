@@ -60,6 +60,7 @@
 #include <okvis/Publisher.hpp>
 #include <okvis/RosParametersReader.hpp>
 #include <okvis/ThreadedKFVio.hpp>
+#include <vikit/timer.h>
 
 #include "rosbag/bag.h"
 #include "rosbag/chunked_file.h"
@@ -94,6 +95,7 @@ int main(int argc, char **argv) {
   vio_parameters_reader.getParameters(parameters);
 
   okvis::ThreadedKFVio okvis_estimator(parameters);
+  vk::Timer total_timer;
 
   // okvis_estimator.setFullStateCallback(std::bind(&okvis::Publisher::publishFullStateAsCallback,&publisher,std::placeholders::_1,std::placeholders::_2,std::placeholders::_3,std::placeholders::_4));
   // okvis_estimator.setLandmarksCallback(std::bind(&okvis::Publisher::publishLandmarksAsCallback,&publisher,std::placeholders::_1,std::placeholders::_2,std::placeholders::_3));
@@ -106,11 +108,13 @@ int main(int argc, char **argv) {
 
   std::string trace_dir = "/tmp";
   nh_private.param("trace_dir", trace_dir, trace_dir);
-  const std::string filename_out = trace_dir + "/traj_estimate.txt";
-  LOG(INFO) << "Writing trace of estimated pose to: " << filename_out;
+  const std::string traj_out = trace_dir + "/traj_estimate.txt";
+  const std::string timing_out = trace_dir + "/trace.csv";
+  LOG(INFO) << "Writing trace of estimated pose to: " << traj_out << " and timings to: " << timing_out;
 
   // setup files to be written
-  publisher.setCsvFile(filename_out);
+  publisher.setCsvFile(traj_out);
+  publisher.setTimingFile(timing_out);
   //publisher.setLandmarksCsvFile(path + "/okvis_estimator_landmarks.csv");
   //okvis_estimator.setImuCsvFile(path + "/imu0_data.csv");
   //for (size_t i = 0; i < numCameras; ++i) {
@@ -188,7 +192,6 @@ int main(int argc, char **argv) {
       return 0;
     }
 
-
     // add images
     okvis::Time t;
     sensor_msgs::ImageConstPtr msg1 = view_cam_iterator
@@ -222,9 +225,14 @@ int main(int argc, char **argv) {
 
     view_cam_iterator++;
 
+    total_timer.start();
+
     // add the image to the frontend for (blocking) processing
     if (t - start > deltaT)
       okvis_estimator.addImageWithIndex(t, 0, filtered, counter);
+
+    publisher.csvSaveTimingAsCallback(msg1->header.stamp.toSec(),total_timer.stop());
+    total_timer.reset();
 
     ++counter;
 

@@ -105,6 +105,16 @@ class Publisher
   /// \param csvFileName The filename of a new file
   bool setCsvFile(std::string csvFileName);
 
+  /// \brief Set a timing output CSV file.
+  /// \param csvFile The file
+  bool setTimingFile(std::fstream& csvFile);
+  /// \brief Set an odometry output CSV file.
+  /// \param csvFileName The filename of a new file
+  bool setTimingFile(std::string& csvFileName);
+  /// \brief Set an odometry output CSV file.
+  /// \param csvFileName The filename of a new file
+  bool setTimingFile(std::string csvFileName);
+
   /// \brief              Set a CVS file where the landmarks will be saved to.
   /// \param csvFile      The file
   bool setLandmarksCsvFile(std::fstream& csvFile);
@@ -203,6 +213,8 @@ class Publisher
       const okvis::Time & t, const okvis::MapPointVector & actualLandmarks,
       const okvis::MapPointVector & transferredLandmarks);
 
+  void csvSaveTimingAsCallback(
+      const double timestamp, const double t_frame);
 
   void txtSaveStateAsCallback(
       const okvis::Time & t, const int64_t& id,
@@ -264,6 +276,8 @@ class Publisher
 
   /// @brief Write CSV header.
   bool writeCsvDescription();
+  /// @brief Write CSV header.
+  bool writeTimingDescription();
   /// @brief Write CSV header for landmarks file.
   bool writeLandmarksCsvDescription();
 
@@ -308,6 +322,7 @@ class Publisher
   uint32_t ctr2_; ///< The counter for the amount of transferred points. Used for the seq parameter in the header.
 
   std::shared_ptr<std::fstream> csvFile_; ///< CSV file to save state in.
+  std::shared_ptr<std::fstream> csvTimingFile_; ///< CSV file to save timing in.
   std::shared_ptr<std::fstream> csvLandmarksFile_;  ///< CSV file to save landmarks in.
 
 };

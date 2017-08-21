@@ -11,6 +11,7 @@ find_package(catkin REQUIRED
   dynamic_reconfigure
   geometry_msgs
   image_geometry
+  vikit_common
 )
 
 # generate dynamic reconfigure stuff
