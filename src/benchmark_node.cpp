@@ -66,6 +66,9 @@
 #include "rosbag/chunked_file.h"
 #include "rosbag/view.h"
 
+#include <unordered_map>
+
+typedef std::unordered_map<double, int64_t> StampIdMap;
 
 // this is just a workbench. most of the stuff here will go into the Frontend class.
 int main(int argc, char **argv) {
@@ -100,9 +103,12 @@ int main(int argc, char **argv) {
   // okvis_estimator.setFullStateCallback(std::bind(&okvis::Publisher::publishFullStateAsCallback,&publisher,std::placeholders::_1,std::placeholders::_2,std::placeholders::_3,std::placeholders::_4));
   // okvis_estimator.setLandmarksCallback(std::bind(&okvis::Publisher::publishLandmarksAsCallback,&publisher,std::placeholders::_1,std::placeholders::_2,std::placeholders::_3));
   // okvis_estimator.setStateCallback(std::bind(&okvis::Publisher::publishStateAsCallback,&publisher,std::placeholders::_1,std::placeholders::_2));
-  okvis_estimator.setOdometryCallback(std::bind(&okvis::Publisher::txtSaveStateAsCallback,&publisher,std::placeholders::_1,std::placeholders::_2,std::placeholders::_3));
+  okvis_estimator.setStateCallback(std::bind(&okvis::Publisher::txtSaveStateAsCallback,&publisher,std::placeholders::_1,std::placeholders::_2));
   okvis_estimator.setBlocking(true);
   publisher.setParameters(parameters); // pass the specified publishing stuff
+
+  std::shared_ptr<StampIdMap> stamp_id_map = std::make_shared<StampIdMap>();
+  publisher.setStampIdMap(stamp_id_map);
 
   const unsigned int numCameras = parameters.nCameraSystem.numCameras();
 
@@ -128,18 +134,6 @@ int main(int argc, char **argv) {
   nh_private.param("bag_path", bag_path, bag_path);
   rosbag::Bag bag(bag_path, rosbag::bagmode::Read);
 
-  // views on topics. the slash is needs to be correct, it's ridiculous...
-  std::string imu_topic("/imu0");
-  rosbag::View view_imu(
-      bag,
-      rosbag::TopicQuery(imu_topic));
-  if (view_imu.size() == 0) {
-    LOG(ERROR) << "no imu topic";
-    return -1;
-  }
-  rosbag::View::iterator view_imu_iterator = view_imu.begin();
-  LOG(INFO) << "No. IMU messages: " << view_imu.size();
-
   std::shared_ptr<rosbag::View> view_cam_ptr;
   rosbag::View::iterator view_cam_iterator;
   std::string camera_topic("/cam0/image_raw");
@@ -163,10 +157,22 @@ int main(int argc, char **argv) {
   {
     ++frame_idx;
     ++view_cam_iterator;
-    std::advance(view_imu_iterator,10);
+    //std::advance(view_imu_iterator,10);
   }
 
-  int counter = dataset_first_frame;
+  // views on topics. the slash is needs to be correct, it's ridiculous...
+  std::string imu_topic("/imu0");
+  rosbag::View view_imu(
+      bag,
+      rosbag::TopicQuery(imu_topic),
+      view_cam_iterator->getTime());
+  if (view_imu.size() == 0) {
+    LOG(ERROR) << "no imu topic";
+    return -1;
+  }
+  rosbag::View::iterator view_imu_iterator = view_imu.begin();
+  LOG(INFO) << "No. IMU messages: " << view_imu.size();
+
   okvis::Time start(0.0);
   while (ros::ok()) {
     ros::spinOnce();
@@ -202,6 +208,7 @@ int main(int argc, char **argv) {
     if (start == okvis::Time(0.0)) {
       start = t;
     }
+    stamp_id_map->emplace(std::make_pair(t.toSec(),frame_idx));
 
     // get all IMU measurements till then
     okvis::Time t_imu=start;
@@ -229,18 +236,18 @@ int main(int argc, char **argv) {
 
     // add the image to the frontend for (blocking) processing
     if (t - start > deltaT)
-      okvis_estimator.addImageWithIndex(t, 0, filtered, counter);
+      okvis_estimator.addImage(t, 0, filtered);
 
     publisher.csvSaveTimingAsCallback(msg1->header.stamp.toSec(),total_timer.stop());
     total_timer.reset();
 
-    ++counter;
+    ++frame_idx;
 
     // display progress
-    if (counter % 20 == 0) {
+    if (frame_idx % 20 == 0) {
       std::cout
           << "\rProgress: "
-          << int(double(counter) / double(view_cam_ptr->size()) * 100)
+          << int(double(frame_idx) / double(view_cam_ptr->size()) * 100)
           << "%  " ;
     }
 

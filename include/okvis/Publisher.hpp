@@ -68,6 +68,8 @@
 /// \brief okvis Main namespace of this package.
 namespace okvis {
 
+typedef std::unordered_map<double, int64_t> StampIdMap;
+
 /**
  * @brief This class handles the publishing to either ROS topics or files.
  */
@@ -147,6 +149,8 @@ class Publisher
     parameters_ = parameters;
   }
 
+  void setStampIdMap(std::shared_ptr<StampIdMap> stamp_id_map);
+
   /**
    * @brief Set the points that are published next.
    * @param pointsMatched Vector of 3D points that have been matched with existing landmarks.
@@ -217,8 +221,7 @@ class Publisher
       const double timestamp, const double t_frame);
 
   void txtSaveStateAsCallback(
-      const okvis::Time & t, const int64_t& id,
-      const okvis::kinematics::Transformation & T_WS);
+      const okvis::Time & t, const okvis::kinematics::Transformation & T_WS);
 
   /**
    * @brief Set and write full state to CSV file.
@@ -324,6 +327,8 @@ class Publisher
   std::shared_ptr<std::fstream> csvFile_; ///< CSV file to save state in.
   std::shared_ptr<std::fstream> csvTimingFile_; ///< CSV file to save timing in.
   std::shared_ptr<std::fstream> csvLandmarksFile_;  ///< CSV file to save landmarks in.
+
+  std::shared_ptr<StampIdMap> stamp_id_map_;
 
 };
 

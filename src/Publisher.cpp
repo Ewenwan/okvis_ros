@@ -88,6 +88,11 @@ Publisher::Publisher(ros::NodeHandle& nh)
   setNodeHandle(nh);
 }
 
+void Publisher::setStampIdMap(std::shared_ptr<StampIdMap> stamp_id_map)
+{
+  stamp_id_map_ = stamp_id_map;
+}
+
 // Set the node handle and advertise topics.
 void Publisher::setNodeHandle(ros::NodeHandle& nh)
 {
@@ -138,7 +143,7 @@ bool Publisher::writeTimingDescription()
     return false;
   if (!csvTimingFile_->good())
     return false;
-  *csvTimingFile_ << "timestamp" << ", " << "tot_time" << std::endl;
+  *csvTimingFile_ << "timestamp" << "," << "tot_time" << std::endl;
   return true;
 }
 
@@ -551,11 +556,19 @@ void Publisher::publishFullStateAsCallback(
 
 // Set and write full state to CSV file.
 void Publisher::txtSaveStateAsCallback(
-    const okvis::Time & t, const int64_t& id,
-    const okvis::kinematics::Transformation & T_WS)
+    const okvis::Time & t, const okvis::kinematics::Transformation & T_WS)
 {
   setTime(t);
   setPath(T_WS);
+  int64_t id;
+  auto stampid = stamp_id_map_->find(t.toSec());
+  if(stampid != stamp_id_map_->end()) {
+      id = stampid->second;
+  }
+  else
+  {
+    LOG(WARNING) << "Counld not find image index for time: " << t.toSec();
+  }
   if (csvFile_) {
     if (csvFile_->good()) {
       Eigen::Vector3d p_WS_W = T_WS.r();
