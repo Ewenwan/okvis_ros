@@ -93,6 +93,11 @@ void Publisher::setStampIdMap(std::shared_ptr<StampIdMap> stamp_id_map)
   stamp_id_map_ = stamp_id_map;
 }
 
+void Publisher::setStampTimerMap(std::shared_ptr<StampTimerMap> stamp_timer_map)
+{
+  stamp_timer_map_ = stamp_timer_map;
+}
+
 // Set the node handle and advertise topics.
 void Publisher::setNodeHandle(ros::NodeHandle& nh)
 {
@@ -579,6 +584,9 @@ void Publisher::txtSaveStateAsCallback(
           << q_WS.z() << " " << q_WS.w() << std::endl;
     }
   }
+  auto result = stamp_timer_map_->find(t.toSec());
+  csvSaveTimingAsCallback(t.toSec(),result->second.stop());
+  stamp_timer_map_->erase(t.toSec());
 }
 
 void Publisher::csvSaveTimingAsCallback(

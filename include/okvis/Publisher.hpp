@@ -64,11 +64,13 @@
 #include <okvis/Parameters.hpp>
 #include <okvis/FrameTypedefs.hpp>
 #include <okvis/Time.hpp>
+#include <vikit/timer.h>
 
 /// \brief okvis Main namespace of this package.
 namespace okvis {
 
 typedef std::unordered_map<double, int64_t> StampIdMap;
+typedef std::unordered_map<double, vk::Timer> StampTimerMap;
 
 /**
  * @brief This class handles the publishing to either ROS topics or files.
@@ -151,6 +153,7 @@ class Publisher
 
   void setStampIdMap(std::shared_ptr<StampIdMap> stamp_id_map);
 
+  void setStampTimerMap(std::shared_ptr<StampTimerMap> stamp_timer_map);
   /**
    * @brief Set the points that are published next.
    * @param pointsMatched Vector of 3D points that have been matched with existing landmarks.
@@ -329,6 +332,7 @@ class Publisher
   std::shared_ptr<std::fstream> csvLandmarksFile_;  ///< CSV file to save landmarks in.
 
   std::shared_ptr<StampIdMap> stamp_id_map_;
+  std::shared_ptr<StampTimerMap> stamp_timer_map_;
 
 };
 

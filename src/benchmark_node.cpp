@@ -69,6 +69,7 @@
 #include <unordered_map>
 
 typedef std::unordered_map<double, int64_t> StampIdMap;
+typedef std::unordered_map<double, vk::Timer> StampTimerMap;
 
 // this is just a workbench. most of the stuff here will go into the Frontend class.
 int main(int argc, char **argv) {
@@ -104,11 +105,13 @@ int main(int argc, char **argv) {
   // okvis_estimator.setLandmarksCallback(std::bind(&okvis::Publisher::publishLandmarksAsCallback,&publisher,std::placeholders::_1,std::placeholders::_2,std::placeholders::_3));
   // okvis_estimator.setStateCallback(std::bind(&okvis::Publisher::publishStateAsCallback,&publisher,std::placeholders::_1,std::placeholders::_2));
   okvis_estimator.setStateCallback(std::bind(&okvis::Publisher::txtSaveStateAsCallback,&publisher,std::placeholders::_1,std::placeholders::_2));
-  okvis_estimator.setBlocking(true);
+  okvis_estimator.setBlocking(false);
   publisher.setParameters(parameters); // pass the specified publishing stuff
 
   std::shared_ptr<StampIdMap> stamp_id_map = std::make_shared<StampIdMap>();
   publisher.setStampIdMap(stamp_id_map);
+  std::shared_ptr<StampTimerMap> stamp_timer_map = std::make_shared<StampTimerMap>();
+  publisher.setStampTimerMap(stamp_timer_map);
 
   const unsigned int numCameras = parameters.nCameraSystem.numCameras();
 
@@ -174,27 +177,18 @@ int main(int argc, char **argv) {
   LOG(INFO) << "No. IMU messages: " << view_imu.size();
 
   okvis::Time start(0.0);
+  ros::Time this_msg_time, last_msg_time;
   while (ros::ok()) {
     ros::spinOnce();
 	  okvis_estimator.display();
 
     // check if at the end
     if (view_imu_iterator == view_imu.end()){
-      std::cout << std::endl << "Finished. Press any key to exit." << std::endl << std::flush;
-      char k = 0;
-      while(k==0 && ros::ok()){
-        k = cv::waitKey(1);
-        ros::spinOnce();
-      }
+      std::cout << std::endl << "Finished." << std::endl << std::flush;
       return 0;
     }
     if (view_cam_iterator == view_cam_ptr->end()) {
-      std::cout << std::endl << "Finished. Press any key to exit." << std::endl << std::flush;
-      char k = 0;
-      while(k==0 && ros::ok()){
-        k = cv::waitKey(1);
-        ros::spinOnce();
-      }
+      std::cout << std::endl << "Finished." << std::endl << std::flush;
       return 0;
     }
 
@@ -205,6 +199,7 @@ int main(int argc, char **argv) {
     cv::Mat filtered(msg1->height, msg1->width, CV_8UC1);
     memcpy(filtered.data, &msg1->data[0], msg1->height * msg1->width);
     t = okvis::Time(msg1->header.stamp.sec, msg1->header.stamp.nsec);
+    this_msg_time = msg1->header.stamp;
     if (start == okvis::Time(0.0)) {
       start = t;
     }
@@ -231,15 +226,20 @@ int main(int argc, char **argv) {
     } while (view_imu_iterator != view_imu.end() && t_imu <= t);
 
     view_cam_iterator++;
+    if(last_msg_time.toSec() > 0)
+      ros::Duration(this_msg_time-last_msg_time).sleep();
+    if(!this_msg_time.is_zero())
+      last_msg_time = this_msg_time;
 
-    total_timer.start();
+    //total_timer.start();
+    stamp_timer_map->emplace(std::make_pair(this_msg_time.toSec(),vk::Timer()));
 
     // add the image to the frontend for (blocking) processing
     if (t - start > deltaT)
       okvis_estimator.addImage(t, 0, filtered);
 
-    publisher.csvSaveTimingAsCallback(msg1->header.stamp.toSec(),total_timer.stop());
-    total_timer.reset();
+    //publisher.csvSaveTimingAsCallback(msg1->header.stamp.toSec(),total_timer.stop());
+    //total_timer.reset();
 
     ++frame_idx;
 
